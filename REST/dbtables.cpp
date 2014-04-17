@@ -78,7 +78,6 @@ void DBTables::Impl::InitHashes()
     TablesHash["SCORES"] = "scores";
 
     FieldsHash["SCORES"] =
-            " tel TEXT NOT NULL, "
             " name TEXT NOT NULL, "
             " score INTEGER NOT NULL ";
 }

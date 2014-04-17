@@ -25,10 +25,10 @@
 
 #define     INVALID_TOKEN_ERROR                      L"INVALID_TOKEN"
 
-#define     PlayerRankJSON_URI_TEMPLATE              L"NowruzPuzzle/PlayerRank/JSON/{TEL}/{TOKEN}"
-#define     PlayerRankXML_URI_TEMPLATE               L"NowruzPuzzle/PlayerRank/XML/{TEL}/{TOKEN}"
-#define     PostPlayerScoreJSON_URI_TEMPLATE         L"NowruzPuzzle/PostPlayerScore/JSON/{TEL}/{NAME}/{SCORE}/{TOKEN}"
-#define     PostPlayerScoreXML_URI_TEMPLATE          L"NowruzPuzzle/PostPlayerScore/XML/{TEL}/{NAME}/{SCORE}/{TOKEN}"
+#define     PlayerRankJSON_URI_TEMPLATE              L"NowruzPuzzle/PlayerRank/JSON/{NAME}/{TOKEN}"
+#define     PlayerRankXML_URI_TEMPLATE               L"NowruzPuzzle/PlayerRank/XML/{NAME}/{TOKEN}"
+#define     PostPlayerScoreJSON_URI_TEMPLATE         L"NowruzPuzzle/PostPlayerScore/JSON/{NAME}/{SCORE}/{TOKEN}"
+#define     PostPlayerScoreXML_URI_TEMPLATE          L"NowruzPuzzle/PostPlayerScore/XML/{NAME}/{SCORE}/{TOKEN}"
 #define     TopScoresJSON_URI_TEMPLATE               L"NowruzPuzzle/TopScores/JSON/{LIMIT}/{TOKEN}"
 #define     TopScoresXML_URI_TEMPLATE                L"NowruzPuzzle/TopScores/XML/{LIMIT}/{TOKEN}"
 #define     TokenJSON_URI_TEMPLATE                   L"NowruzPuzzle/Token/JSON"
@@ -53,10 +53,9 @@ struct PublicAPIResource::Impl
 
     bool IsValidToken(const std::wstring &encryptedToken);
 
-    void GetPlayerRank(const std::string &tel,
+    void GetPlayerRank(const std::string &name,
                       boost::property_tree::wptree &out_tree);
-    void PostPlayerScore(const std::string &tel,
-                         const std::string &name,
+    void PostPlayerScore(const std::string &name,
                          const std::string &score,
                          boost::property_tree::wptree &out_tree);
     void GetTopScoresTree(const OutputType &outputType,
@@ -66,16 +65,14 @@ struct PublicAPIResource::Impl
                       boost::property_tree::wptree &out_tree);
     void GetToken(boost::property_tree::wptree &out_tree);
 
-    void PlayerRankJSON(const std::wstring &tel,
+    void PlayerRankJSON(const std::wstring &name,
                         std::wstring &out_response);
-    void PlayerRankXML(const std::wstring &tel,
+    void PlayerRankXML(const std::wstring &name,
                        std::wstring &out_response);
-    void PostPlayerScoreJSON(const std::wstring &tel,
-                             const std::wstring &name,
+    void PostPlayerScoreJSON(const std::wstring &name,
                              const std::wstring &score,
                              std::wstring &out_response);
-    void PostPlayerScoreXML(const std::wstring &tel,
-                            const std::wstring &name,
+    void PostPlayerScoreXML(const std::wstring &name,
                             const std::wstring &score,
                             std::wstring &out_response);
     void TopScoresJSON(size_t limit, std::wstring &out_response);
@@ -145,12 +142,12 @@ void PublicAPIResource::handleRequest(const Wt::Http::Request &request, Wt::Http
 
             } else if (uriTemplate == PostPlayerScoreJSON_URI_TEMPLATE) {
 
-                m_pimpl->PostPlayerScoreJSON(args[0], args[1], args[2], outResponse);
+                m_pimpl->PostPlayerScoreJSON(args[0], args[1], outResponse);
                 PrintJSON(response, outResponse);
 
             } else if (uriTemplate == PostPlayerScoreXML_URI_TEMPLATE) {
 
-                m_pimpl->PostPlayerScoreXML(args[0], args[1], args[2], outResponse);
+                m_pimpl->PostPlayerScoreXML(args[0], args[1], outResponse);
                 PrintXML(response, outResponse);
 
             } else if (uriTemplate == TopScoresJSON_URI_TEMPLATE) {
@@ -234,7 +231,7 @@ bool PublicAPIResource::Impl::IsValidToken(const std::wstring &encryptedToken)
 }
 
 
-void PublicAPIResource::Impl::GetPlayerRank(const std::string &tel,
+void PublicAPIResource::Impl::GetPlayerRank(const std::string &name,
                                             boost::property_tree::wptree &out_tree)
 {
     out_tree.clear();
@@ -242,20 +239,19 @@ void PublicAPIResource::Impl::GetPlayerRank(const std::string &tel,
     cppdb::transaction guard(RT::DB()->SQL());
 
     cppdb::result r = RT::DB()->SQL()
-            << (boost::format("SELECT tel, SUM(score) as score_sum_col"
+            << (boost::format("SELECT name, score"
                               " FROM %1%"
-                              " GROUP BY tel "
-                              " ORDER BY score_sum_col DESC;")
+                              " ORDER BY score DESC;")
                 % RT::DBTables()->Table("SCORES")).str();
 
-    string dbTel;
+    string dbName;
     string score;
 
     size_t i = 0;
     while(r.next()) {
         ++i;
-        r >> dbTel >> score;
-        if (dbTel == tel) {
+        r >> dbName >> score;
+        if (dbName == name) {
             break;
         }
     }
@@ -265,8 +261,7 @@ void PublicAPIResource::Impl::GetPlayerRank(const std::string &tel,
     out_tree.put(L"rank", boost::lexical_cast<std::wstring>(i));
 }
 
-void PublicAPIResource::Impl::PostPlayerScore(const std::string &tel,
-                                              const std::string &name,
+void PublicAPIResource::Impl::PostPlayerScore(const std::string &name,
                                               const std::string &score,
                                               boost::property_tree::wptree &out_tree)
 {
@@ -275,8 +270,8 @@ void PublicAPIResource::Impl::PostPlayerScore(const std::string &tel,
     cppdb::transaction guard(RT::DB()->SQL());
 
     RT::DB()->Insert(RT::DBTables()->Table("SCORES"),
-                     "tel, name, score", 3,
-                     tel.c_str(),
+                     "name, score",
+                     2,
                      name.c_str(),
                      score.c_str());
 
@@ -356,21 +351,19 @@ void PublicAPIResource::Impl::GetTopScores(const OutputType &outputType, size_t 
     cppdb::transaction guard(RT::DB()->SQL());
 
     cppdb::result r = RT::DB()->SQL()
-            << (boost::format("SELECT tel, name, SUM(score) as score_sum_col"
+            << (boost::format("SELECT name, score"
                               " FROM %1%"
-                              " GROUP BY tel "
-                              " ORDER BY score_sum_col DESC"
+                              " ORDER BY score DESC"
                               " LIMIT %2%;")
                 % RT::DBTables()->Table("SCORES")
                 % limit).str();
 
-    string tel;
     string name;
     string score;
 
     while(r.next()) {
-        r >> tel >> name >> score;
-        Row_t row { tel, name, score };
+        r >> name >> score;
+        Row_t row { name, score };
         data.push_back(row);
     }
 
@@ -393,7 +386,7 @@ void PublicAPIResource::Impl::GetToken(boost::property_tree::wptree &out_tree)
     out_tree.put(L"token", WString(token).value());
 }
 
-void PublicAPIResource::Impl::PlayerRankJSON(const std::wstring &tel,
+void PublicAPIResource::Impl::PlayerRankJSON(const std::wstring &name,
                                              std::wstring &out_response)
 {
     out_response.clear();
@@ -401,14 +394,14 @@ void PublicAPIResource::Impl::PlayerRankJSON(const std::wstring &tel,
     std::wstringstream stream;
     boost::property_tree::wptree tree;
 
-    GetPlayerRank(WString(tel).toUTF8(), tree);
+    GetPlayerRank(WString(name).toUTF8(), tree);
 
     boost::property_tree::write_json(stream, tree);
 
     out_response.assign(stream.str());
 }
 
-void PublicAPIResource::Impl::PlayerRankXML(const std::wstring &tel,
+void PublicAPIResource::Impl::PlayerRankXML(const std::wstring &name,
                                             std::wstring &out_response)
 {
     out_response.clear();
@@ -416,15 +409,14 @@ void PublicAPIResource::Impl::PlayerRankXML(const std::wstring &tel,
     std::wstringstream stream;
     boost::property_tree::wptree tree;
 
-    GetPlayerRank(WString(tel).toUTF8(), tree);
+    GetPlayerRank(WString(name).toUTF8(), tree);
 
     boost::property_tree::write_xml(stream, tree);
 
     out_response.assign(stream.str());
 }
 
-void PublicAPIResource::Impl::PostPlayerScoreJSON(const std::wstring &tel,
-                                                  const std::wstring &name,
+void PublicAPIResource::Impl::PostPlayerScoreJSON(const std::wstring &name,
                                                   const std::wstring &score,
                                                   std::wstring &out_response)
 {
@@ -433,15 +425,14 @@ void PublicAPIResource::Impl::PostPlayerScoreJSON(const std::wstring &tel,
     std::wstringstream stream;
     boost::property_tree::wptree tree;
 
-    PostPlayerScore(WString(tel).toUTF8(), WString(name).toUTF8(), WString(score).toUTF8(), tree);
+    PostPlayerScore(WString(name).toUTF8(), WString(score).toUTF8(), tree);
 
     boost::property_tree::write_json(stream, tree);
 
     out_response.assign(stream.str());
 }
 
-void PublicAPIResource::Impl::PostPlayerScoreXML(const std::wstring &tel,
-                                                 const std::wstring &name,
+void PublicAPIResource::Impl::PostPlayerScoreXML(const std::wstring &name,
                                                  const std::wstring &score,
                                                  std::wstring &out_response)
 {
@@ -450,7 +441,7 @@ void PublicAPIResource::Impl::PostPlayerScoreXML(const std::wstring &tel,
     std::wstringstream stream;
     boost::property_tree::wptree tree;
 
-    PostPlayerScore(WString(tel).toUTF8(), WString(name).toUTF8(), WString(score).toUTF8(), tree);
+    PostPlayerScore(WString(name).toUTF8(), WString(score).toUTF8(), tree);
 
     boost::property_tree::write_xml(stream, tree);
 

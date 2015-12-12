@@ -1,7 +1,7 @@
 Puzzle Game Leaderboard
 ========================
 
-The REST server for a puzzle game's leaderboard, written in [Wt (Witty) C++ web framework](http://www.webtoolkit.eu/wt) with performance in mind.
+The secure high-performance REST server for a puzzle game's leaderboard, written in [Wt (Witty) C++ web framework](http://www.webtoolkit.eu/wt) with performance in mind.
 
 This project consists of the following sub-projects:
 
